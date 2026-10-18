@@ -1,0 +1,39 @@
+name: Build Africa Truck King APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Download Three.js Locally
+        run: |
+          mkdir -p app/src/main/assets/www/js
+          curl -s -L -o app/src/main/assets/www/js/three.min.js https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js
+          test -s app/src/main/assets/www/js/three.min.js || exit 1
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Compile Debug APK
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AfricaTruckKing-Debug-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
