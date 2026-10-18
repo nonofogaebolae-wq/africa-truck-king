@@ -18,17 +18,17 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Install Gradle 8.5 Directly
+      - name: Install Gradle 8.5
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: '8.5'
 
-      - name: Auto-Configure Android Gradle Structure
+      - name: Auto-Configure Complete Android Shell
         run: |
           mkdir -p app/src/main/assets/www/js
           mkdir -p app/src/main/java/com/africatruckking/game
 
-          # 1. Ensure settings.gradle is correctly configured
+          # 1. Root settings.gradle
           cat << 'EOF' > settings.gradle
           pluginManagement {
               repositories {
@@ -48,14 +48,14 @@ jobs:
           include ':app'
           EOF
 
-          # 2. Ensure root build.gradle is correctly configured
+          # 2. Root build.gradle
           cat << 'EOF' > build.gradle
           plugins {
               id 'com.android.application' version '8.2.2' apply false
           }
           EOF
 
-          # 3. Ensure app/build.gradle exists and applies Android application plugin
+          # 3. app/build.gradle
           cat << 'EOF' > app/build.gradle
           plugins {
               id 'com.android.application'
@@ -91,12 +91,153 @@ jobs:
           }
 
           dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'androidx.webkit:webkit:1.10.0'
           }
           EOF
 
-          # 4. Download Three.js locally for 100% offline gameplay inside APK
+          # 4. Bulletproof AndroidManifest (Uses Android built-in Fullscreen theme)
+          cat << 'EOF' > app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+              <application
+                  android:allowBackup="true"
+                  android:icon="@android:drawable/sym_def_app_icon"
+                  android:label="Africa Truck King"
+                  android:supportsRtl="true"
+                  android:hardwareAccelerated="true"
+                  android:theme="@android:style/Theme.NoTitleBar.Fullscreen">
+
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true"
+                      android:screenOrientation="sensorLandscape"
+                      android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+                      android:launchMode="singleTask">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          # 5. Pure Java MainActivity (Zero external XML layout dependencies)
+          cat << 'EOF' > app/src/main/java/com/africatruckking/game/MainActivity.java
+          package com.africatruckking.game;
+
+          import android.annotation.SuppressLint;
+          import android.app.Activity;
+          import android.os.Build;
+          import android.os.Bundle;
+          import android.view.View;
+          import android.view.WindowInsets;
+          import android.view.WindowInsetsController;
+          import android.view.WindowManager;
+          import android.webkit.WebResourceRequest;
+          import android.webkit.WebResourceResponse;
+          import android.webkit.WebSettings;
+          import android.webkit.WebView;
+          import androidx.webkit.WebViewAssetLoader;
+          import androidx.webkit.WebViewClientCompat;
+
+          public class MainActivity extends Activity {
+              private WebView mWebView;
+              private WebViewAssetLoader mAssetLoader;
+
+              @SuppressLint("SetJavaScriptEnabled")
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
+                  mAssetLoader = new WebViewAssetLoader.Builder()
+                          .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this))
+                          .build();
+
+                  mWebView = new WebView(this);
+                  setContentView(mWebView);
+                  applyImmersive();
+
+                  WebSettings settings = mWebView.getSettings();
+                  settings.setJavaScriptEnabled(true);
+                  settings.setDomStorageEnabled(true);
+                  settings.setDatabaseEnabled(true);
+                  settings.setMediaPlaybackRequiresUserGesture(false);
+                  settings.setAllowFileAccess(false);
+                  settings.setAllowContentAccess(false);
+                  mWebView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+
+                  mWebView.setWebViewClient(new WebViewClientCompat() {
+                      @Override
+                      public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                          return mAssetLoader.shouldInterceptRequest(request.getUrl());
+                      }
+                  });
+
+                  mWebView.loadUrl("https://appassets.androidplatform.net/assets/www/index.html");
+              }
+
+              private void applyImmersive() {
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                      WindowInsetsController controller = getWindow().getInsetsController();
+                      if (controller != null) {
+                          controller.hide(WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars());
+                          controller.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+                      }
+                  } else {
+                      getWindow().getDecorView().setSystemUiVisibility(
+                          View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                          | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                          | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                          | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                          | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                          | View.SYSTEM_UI_FLAG_FULLSCREEN
+                      );
+                  }
+              }
+
+              @Override
+              public void onWindowFocusChanged(boolean hasFocus) {
+                  super.onWindowFocusChanged(hasFocus);
+                  if (hasFocus) applyImmersive();
+              }
+
+              @Override
+              protected void onPause() {
+                  super.onPause();
+                  if (mWebView != null) {
+                      mWebView.onPause();
+                      mWebView.pauseTimers();
+                      mWebView.evaluateJavascript("if (window.onAndroidAppPause) window.onAndroidAppPause();", null);
+                  }
+              }
+
+              @Override
+              protected void onResume() {
+                  super.onResume();
+                  if (mWebView != null) {
+                      mWebView.onResume();
+                      mWebView.resumeTimers();
+                      mWebView.evaluateJavascript("if (window.onAndroidAppResume) window.onAndroidAppResume();", null);
+                  }
+                  applyImmersive();
+              }
+
+              @Override
+              protected void onDestroy() {
+                  if (mWebView != null) {
+                      mWebView.destroy();
+                      mWebView = null;
+                  }
+                  super.onDestroy();
+              }
+          }
+          EOF
+
+          # 6. Offline Three.js Library
           curl -s -L -o app/src/main/assets/www/js/three.min.js https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js
           test -s app/src/main/assets/www/js/three.min.js || exit 1
 
