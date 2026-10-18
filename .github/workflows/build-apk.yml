@@ -28,7 +28,14 @@ jobs:
           mkdir -p app/src/main/assets/www/js
           mkdir -p app/src/main/java/com/africatruckking/game
 
-          # 1. Root settings.gradle
+          # 1. gradle.properties (CRITICAL: Enables AndroidX support)
+          cat << 'EOF' > gradle.properties
+          android.useAndroidX=true
+          android.enableJetifier=true
+          org.gradle.jvmargs=-Xmx2048m
+          EOF
+
+          # 2. settings.gradle
           cat << 'EOF' > settings.gradle
           pluginManagement {
               repositories {
@@ -48,14 +55,14 @@ jobs:
           include ':app'
           EOF
 
-          # 2. Root build.gradle
+          # 3. root build.gradle
           cat << 'EOF' > build.gradle
           plugins {
               id 'com.android.application' version '8.2.2' apply false
           }
           EOF
 
-          # 3. app/build.gradle
+          # 4. app/build.gradle
           cat << 'EOF' > app/build.gradle
           plugins {
               id 'com.android.application'
@@ -95,7 +102,7 @@ jobs:
           }
           EOF
 
-          # 4. Bulletproof AndroidManifest (Uses Android built-in Fullscreen theme)
+          # 5. Bulletproof AndroidManifest
           cat << 'EOF' > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -124,7 +131,7 @@ jobs:
           </manifest>
           EOF
 
-          # 5. Pure Java MainActivity (Zero external XML layout dependencies)
+          # 6. MainActivity.java
           cat << 'EOF' > app/src/main/java/com/africatruckking/game/MainActivity.java
           package com.africatruckking.game;
 
@@ -237,12 +244,12 @@ jobs:
           }
           EOF
 
-          # 6. Offline Three.js Library
+          # 7. Download Three.js locally
           curl -s -L -o app/src/main/assets/www/js/three.min.js https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js
           test -s app/src/main/assets/www/js/three.min.js || exit 1
 
       - name: Compile Debug APK
-        run: gradle :app:assembleDebug
+        run: gradle :app:assembleDebug --stacktrace
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
