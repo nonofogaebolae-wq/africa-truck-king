@@ -23,14 +23,85 @@ jobs:
         with:
           gradle-version: '8.5'
 
-      - name: Download Three.js Locally
+      - name: Auto-Configure Android Gradle Structure
         run: |
           mkdir -p app/src/main/assets/www/js
+          mkdir -p app/src/main/java/com/africatruckking/game
+
+          # 1. Ensure settings.gradle is correctly configured
+          cat << 'EOF' > settings.gradle
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "AfricaTruckKing"
+          include ':app'
+          EOF
+
+          # 2. Ensure root build.gradle is correctly configured
+          cat << 'EOF' > build.gradle
+          plugins {
+              id 'com.android.application' version '8.2.2' apply false
+          }
+          EOF
+
+          # 3. Ensure app/build.gradle exists and applies Android application plugin
+          cat << 'EOF' > app/build.gradle
+          plugins {
+              id 'com.android.application'
+          }
+
+          android {
+              namespace 'com.africatruckking.game'
+              compileSdk 34
+
+              defaultConfig {
+                  applicationId "com.africatruckking.game"
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 1
+                  versionName "0.2.1"
+              }
+
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+                  }
+                  debug {
+                      applicationIdSuffix ".debug"
+                      debuggable true
+                  }
+              }
+
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+          }
+
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'androidx.webkit:webkit:1.10.0'
+          }
+          EOF
+
+          # 4. Download Three.js locally for 100% offline gameplay inside APK
           curl -s -L -o app/src/main/assets/www/js/three.min.js https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js
           test -s app/src/main/assets/www/js/three.min.js || exit 1
 
       - name: Compile Debug APK
-        run: gradle assembleDebug
+        run: gradle :app:assembleDebug
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
