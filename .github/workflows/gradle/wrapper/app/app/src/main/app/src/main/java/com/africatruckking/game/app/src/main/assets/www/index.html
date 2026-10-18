@@ -1,0 +1,1246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>AFRICA TRUCK KING — Ultra 3D Simulator (Stage 1)</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+      margin: 0;
+      padding: 0;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #0b0d10;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    #canvas-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+    /* HUD Overlays */
+    #hud-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 10;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 14px;
+    }
+    .hud-card {
+      background: rgba(18, 22, 28, 0.78);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 175, 55, 0.25);
+      border-radius: 8px;
+      color: #f1f5f9;
+      pointer-events: auto;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    }
+    /* Top Bar */
+    #top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+    .brand-title {
+      color: #f59e0b;
+      font-weight: 800;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .brand-title span {
+      background: #dc2626;
+      color: #fff;
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .sys-info {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      font-family: monospace;
+      color: #94a3b8;
+    }
+    .sys-info b { color: #f8fafc; }
+
+    /* Dashboard Cluster */
+    #cluster {
+      align-self: center;
+      display: flex;
+      gap: 20px;
+      padding: 10px 24px;
+      align-items: baseline;
+      border-bottom: 2px solid #f59e0b;
+    }
+    .gauge {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .gauge-val {
+      font-size: 34px;
+      font-weight: 900;
+      font-family: 'Courier New', Courier, monospace;
+      color: #38bdf8;
+      text-shadow: 0 0 12px rgba(56, 189, 248, 0.4);
+    }
+    .gauge-unit {
+      font-size: 10px;
+      text-transform: uppercase;
+      color: #94a3b8;
+      letter-spacing: 1px;
+    }
+    .gear-box {
+      font-size: 32px;
+      font-weight: 900;
+      color: #22c55e;
+      min-width: 40px;
+      text-align: center;
+    }
+
+    /* Mobile Controls */
+    #touch-controls {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      width: 100%;
+      pointer-events: none;
+      margin-bottom: 6px;
+    }
+    .touch-group {
+      display: flex;
+      gap: 14px;
+      pointer-events: auto;
+    }
+    .ctrl-btn {
+      width: 66px;
+      height: 66px;
+      border-radius: 50%;
+      background: rgba(30, 41, 59, 0.85);
+      border: 2px solid rgba(245, 158, 11, 0.4);
+      color: #f8fafc;
+      font-weight: 700;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      cursor: pointer;
+      touch-action: manipulation;
+      transition: background 0.1s, transform 0.05s;
+      box-shadow: 0 6px 16px rgba(0,0,0,0.4);
+    }
+    .ctrl-btn:active, .ctrl-btn.active {
+      background: #f59e0b;
+      color: #0f172a;
+      transform: scale(0.94);
+      border-color: #fbbf24;
+    }
+    .pedal-btn {
+      width: 72px;
+      height: 105px;
+      border-radius: 12px;
+    }
+    .pedal-acc {
+      background: linear-gradient(180deg, #1e293b 0%, #15803d 100%);
+      border-color: #22c55e;
+    }
+    .pedal-brk {
+      background: linear-gradient(180deg, #1e293b 0%, #b91c1c 100%);
+      border-color: #ef4444;
+    }
+
+    /* Quick actions */
+    #action-strip {
+      display: flex;
+      gap: 10px;
+      pointer-events: auto;
+    }
+    .small-btn {
+      padding: 8px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      border-radius: 6px;
+      background: rgba(30, 41, 59, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #e2e8f0;
+      cursor: pointer;
+      backdrop-filter: blur(4px);
+    }
+    .small-btn:active { background: #334155; }
+
+    /* Road Alert Notification */
+    #env-alert {
+      position: absolute;
+      bottom: 120px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 6px 16px;
+      font-size: 12px;
+      text-transform: uppercase;
+      font-weight: 700;
+      letter-spacing: 1px;
+      border-radius: 20px;
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid #eab308;
+      color: #facc15;
+    }
+
+    /* Audio Initialization Prompt */
+    #audio-gate {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(10, 12, 16, 0.92);
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      color: #fff;
+      text-align: center;
+      padding: 24px;
+    }
+    #audio-gate h1 {
+      font-size: 28px;
+      font-weight: 900;
+      letter-spacing: 2px;
+      color: #f59e0b;
+      margin-bottom: 8px;
+    }
+    #audio-gate p {
+      max-width: 440px;
+      color: #94a3b8;
+      font-size: 14px;
+      line-height: 1.5;
+      margin-bottom: 24px;
+    }
+    #start-btn {
+      background: #f59e0b;
+      color: #0b0f19;
+      padding: 16px 36px;
+      border: none;
+      font-size: 16px;
+      font-weight: 800;
+      border-radius: 8px;
+      cursor: pointer;
+      letter-spacing: 1px;
+      box-shadow: 0 0 25px rgba(245, 158, 11, 0.4);
+    }
+  </style>
+
+  <!-- Import Three.js via CDN for Stage 1 execution -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+  <div id="canvas-container"></div>
+
+  <!-- Audio Gate to comply with Mobile Autoplay Policies -->
+  <div id="audio-gate">
+    <h1>AFRICA TRUCK KING</h1>
+    <p>A1 Trans-Kalahari Transport Corridor (Botswana Section).<br/>Features Real-time V8 Diesel Synthesis, Physical Chassis Dynamics, Surface Friction, and Botswana SADC Road Markings.</p>
+    <button id="start-btn">START ENGINE</button>
+  </div>
+
+  <div id="hud-overlay">
+    <!-- Top Navigation / Telemetry -->
+    <div id="top-bar" class="hud-card">
+      <div class="brand-title">Africa Truck King <span>v0.1 STAGE 1</span></div>
+      <div class="sys-info">
+        <div>LOC: <b id="loc-txt">A1: GABORONE - PALAPYE</b></div>
+        <div>SURFACE: <b id="surface-txt" style="color:#22c55e">TAR HIGHWAY</b></div>
+        <div>FPS: <b id="fps-txt">60</b></div>
+      </div>
+      <div id="action-strip">
+        <button class="small-btn" id="cam-btn">CAM (C)</button>
+        <button class="small-btn" id="light-btn">LIGHTS (L)</button>
+        <button class="small-btn" id="horn-btn">HORN (H)</button>
+      </div>
+    </div>
+
+    <div id="env-alert">ROAD CLEAR — 100 KM/H REGION</div>
+
+    <!-- Central Gauge Cluster -->
+    <div id="cluster" class="hud-card">
+      <div class="gauge">
+        <div class="gear-box" id="gear-txt">D</div>
+        <div class="gauge-unit">GEAR</div>
+      </div>
+      <div class="gauge">
+        <div class="gauge-val" id="speed-txt">0</div>
+        <div class="gauge-unit">KM / H</div>
+      </div>
+      <div class="gauge">
+        <div class="gauge-val" id="rpm-txt" style="color:#f59e0b">650</div>
+        <div class="gauge-unit">ENGINE RPM</div>
+      </div>
+    </div>
+
+    <!-- Mobile Touch Controls -->
+    <div id="touch-controls">
+      <!-- Steering Left / Right -->
+      <div class="touch-group">
+        <div class="ctrl-btn" id="btn-left">◀<br/>STEER</div>
+        <div class="ctrl-btn" id="btn-right">STEER<br/>▶</div>
+      </div>
+
+      <!-- Gear Selector Toggle -->
+      <div class="touch-group">
+        <div class="ctrl-btn" id="btn-gear" style="border-radius:12px; width:54px; height:54px;">R / D</div>
+      </div>
+
+      <!-- Pedals (Brake/Reverse, Accelerate) -->
+      <div class="touch-group">
+        <div class="ctrl-btn pedal-btn pedal-brk" id="btn-brake">BRAKE<br/>▼</div>
+        <div class="ctrl-btn pedal-btn pedal-acc" id="btn-gas">GAS<br/>▲</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /**
+     * AFRICA TRUCK KING — STAGE 1 ENGINE CORE
+     * Implements:
+     * 1. Procedural 6x4 African Long-Haul Tractor Unit
+     * 2. Multimodal Vehicle Physics (Spring Suspension, Tractive Force, Road Friction)
+     * 3. SADC Standard Road Architecture (A1 corridor tar with transitional gravel bypass)
+     * 4. Synthesized V8 Diesel Audio Generator (Web Audio API)
+     * 5. Multi-View Camera Rig (Chase, Cabin, Bumper)
+     */
+
+    // --- AUDIO SUBSYSTEM: SYNTHESIZED V8 DIESEL ENGINE ---
+    class TruckAudioSystem {
+      constructor() {
+        this.ctx = null;
+        this.masterGain = null;
+        this.engineOsc1 = null;
+        this.engineOsc2 = null;
+        this.engineGain = null;
+        this.engineFilter = null;
+        this.turboOsc = null;
+        this.turboGain = null;
+        this.hornOsc = null;
+        this.hornGain = null;
+        this.airBrakeBuffer = null;
+        this.initialized = false;
+      }
+
+      init() {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        this.ctx = new AudioContext();
+
+        this.masterGain = this.ctx.createGain();
+        this.masterGain.gain.setValueAtTime(0.7, this.ctx.currentTime);
+        this.masterGain.connect(this.ctx.destination);
+
+        // --- Low-End Diesel Cylinder Combustion Synthesis ---
+        // V8 4-stroke cycle creates 4 ignition pulses per crank revolution
+        this.engineOsc1 = this.ctx.createOscillator();
+        this.engineOsc1.type = 'sawtooth';
+        this.engineOsc1.frequency.setValueAtTime(28, this.ctx.currentTime); // ~650-700 RPM idle
+
+        this.engineOsc2 = this.ctx.createOscillator();
+        this.engineOsc2.type = 'triangle';
+        this.engineOsc2.frequency.setValueAtTime(14, this.ctx.currentTime);
+
+        this.engineFilter = this.ctx.createBiquadFilter();
+        this.engineFilter.type = 'lowpass';
+        this.engineFilter.frequency.setValueAtTime(160, this.ctx.currentTime);
+        this.engineFilter.Q.setValueAtTime(3.5, this.ctx.currentTime);
+
+        this.engineGain = this.ctx.createGain();
+        this.engineGain.gain.setValueAtTime(0.35, this.ctx.currentTime);
+
+        this.engineOsc1.connect(this.engineFilter);
+        this.engineOsc2.connect(this.engineFilter);
+        this.engineFilter.connect(this.engineGain);
+        this.engineGain.connect(this.masterGain);
+
+        // --- Turbocharger Spool Whine (High frequency sine wave) ---
+        this.turboOsc = this.ctx.createOscillator();
+        this.turboOsc.type = 'sine';
+        this.turboOsc.frequency.setValueAtTime(1200, this.ctx.currentTime);
+
+        this.turboGain = this.ctx.createGain();
+        this.turboGain.gain.setValueAtTime(0.001, this.ctx.currentTime);
+
+        this.turboOsc.connect(this.turboGain);
+        this.turboGain.connect(this.masterGain);
+
+        // --- Dual-Tone Air Horn ---
+        this.hornOsc = this.ctx.createOscillator();
+        this.hornOsc.type = 'sawtooth';
+        this.hornOsc.frequency.setValueAtTime(370, this.ctx.currentTime); // Standard commercial horn pitch
+
+        this.hornGain = this.ctx.createGain();
+        this.hornGain.gain.setValueAtTime(0.0, this.ctx.currentTime);
+        this.hornOsc.connect(this.hornGain);
+        this.hornGain.connect(this.masterGain);
+
+        // Start Oscillators
+        this.engineOsc1.start();
+        this.engineOsc2.start();
+        this.turboOsc.start();
+        this.hornOsc.start();
+
+        this.initialized = true;
+      }
+
+      update(rpm, throttle, speedKmh) {
+        if (!this.initialized) return;
+
+        // V8 fundamental firing frequency: (RPM / 60) * (Cylinders / 2) -> (RPM / 60) * 4
+        const fundamentalFreq = Math.max(18, (rpm / 60) * 4);
+        this.engineOsc1.frequency.setTargetAtTime(fundamentalFreq, this.ctx.currentTime, 0.04);
+        this.engineOsc2.frequency.setTargetAtTime(fundamentalFreq * 0.5, this.ctx.currentTime, 0.04);
+
+        // Filter opening based on load and RPM
+        const filterCutoff = 130 + (rpm / 2400) * 450 + (throttle * 300);
+        this.engineFilter.frequency.setTargetAtTime(filterCutoff, this.ctx.currentTime, 0.05);
+
+        // Volume increases under throttle load
+        const engineVol = 0.28 + (throttle * 0.28) + (rpm / 2400) * 0.15;
+        this.engineGain.gain.setTargetAtTime(engineVol, this.ctx.currentTime, 0.05);
+
+        // Turbo whine ramps with throttle and engine load
+        const turboFreq = 1100 + (rpm / 2400) * 2200;
+        const turboVol = Math.max(0.001, throttle * 0.065 * (rpm / 1500));
+        this.turboOsc.frequency.setTargetAtTime(turboFreq, this.ctx.currentTime, 0.08);
+        this.turboGain.gain.setTargetAtTime(turboVol, this.ctx.currentTime, 0.08);
+      }
+
+      playAirBrakeHiss() {
+        if (!this.initialized) return;
+        // White noise burst for pneumatic air discharge
+        const bufferSize = this.ctx.sampleRate * 0.4;
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.3));
+        }
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = buffer;
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.value = 2400;
+        filter.Q.value = 1.2;
+
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.38);
+
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.masterGain);
+        noise.start();
+      }
+
+      setHorn(state) {
+        if (!this.initialized) return;
+        this.hornGain.gain.setTargetAtTime(state ? 0.35 : 0.0, this.ctx.currentTime, 0.03);
+      }
+    }
+
+    // --- GAME ENGINE SETUP ---
+    const container = document.getElementById('canvas-container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xbfe3f7); // Kalahari high-sun atmosphere
+    scene.fog = new THREE.FogExp2(0xd6e8f5, 0.0022);
+
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.3, 1600);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.05;
+    container.appendChild(renderer.domElement);
+
+    // --- ATMOSPHERIC AFRICAN SUNLIGHT ---
+    const hemiLight = new THREE.HemisphereLight(0xfff7ed, 0x8a5531, 0.7); // Sky tint vs Kalahari red ground reflection
+    scene.add(hemiLight);
+
+    const sunLight = new THREE.DirectionalLight(0xfff5e6, 1.4);
+    sunLight.position.set(120, 180, 80);
+    sunLight.castShadow = true;
+    sunLight.shadow.mapSize.width = 2048;
+    sunLight.shadow.mapSize.height = 2048;
+    sunLight.shadow.camera.near = 10;
+    sunLight.shadow.camera.far = 450;
+    sunLight.shadow.camera.left = -60;
+    sunLight.shadow.camera.right = 60;
+    sunLight.shadow.camera.top = 60;
+    sunLight.shadow.camera.bottom = -60;
+    sunLight.shadow.bias = -0.0005;
+    scene.add(sunLight);
+
+    // --- VEHICLE GEOMETRY BUILDER (ORIGINAL 6x4 HEAVY HAULER) ---
+    // Built procedurally to guarantee zero asset loading errors while maintaining accurate proportions.
+    function createTruckTractor() {
+      const truck = new THREE.Group();
+
+      // Materials
+      const cabinMat = new THREE.MeshStandardMaterial({
+        color: 0xc83818, // Botswana Ochre Red gloss
+        roughness: 0.25,
+        metalness: 0.4
+      });
+      const chassisMat = new THREE.MeshStandardMaterial({
+        color: 0x1e242b,
+        roughness: 0.75,
+        metalness: 0.8
+      });
+      const darkTrimMat = new THREE.MeshStandardMaterial({
+        color: 0x111317,
+        roughness: 0.9
+      });
+      const chromeMat = new THREE.MeshStandardMaterial({
+        color: 0xdddddd,
+        metalness: 0.95,
+        roughness: 0.1
+      });
+      const glassMat = new THREE.MeshPhysicalMaterial({
+        color: 0x112233,
+        roughness: 0.05,
+        metalness: 0.1,
+        transparent: true,
+        opacity: 0.75,
+        transmission: 0.6
+      });
+      const rubberMat = new THREE.MeshStandardMaterial({
+        color: 0x1c1d21,
+        roughness: 0.9
+      });
+      const headlightMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+      const taillightMat = new THREE.MeshStandardMaterial({
+        color: 0x880000,
+        emissive: 0x000000,
+        roughness: 0.3
+      });
+
+      // 1. Chassis Frame Rails
+      const frameGeom = new THREE.BoxGeometry(1.2, 0.25, 7.2);
+      const chassisFrame = new THREE.Mesh(frameGeom, chassisMat);
+      chassisFrame.position.y = 0.8;
+      chassisFrame.castShadow = true;
+      chassisFrame.receiveShadow = true;
+      truck.add(chassisFrame);
+
+      // Fifth wheel hitch (for trailers)
+      const hitchGeom = new THREE.CylinderGeometry(0.5, 0.5, 0.1, 16);
+      const hitch = new THREE.Mesh(hitchGeom, chassisMat);
+      hitch.position.set(0, 0.98, -1.8);
+      truck.add(hitch);
+
+      // Fuel Tanks (Dual cylindrical aluminum tanks)
+      const tankGeom = new THREE.CylinderGeometry(0.35, 0.35, 2.2, 16);
+      tankGeom.rotateZ(Math.PI / 2);
+      const tankL = new THREE.Mesh(tankGeom, chromeMat);
+      tankL.position.set(-1.0, 0.65, -0.4);
+      tankL.castShadow = true;
+      truck.add(tankL);
+
+      const tankR = tankL.clone();
+      tankR.position.x = 1.0;
+      truck.add(tankR);
+
+      // Dual Chrome Exhaust Stacks
+      const exhaustGeom = new THREE.CylinderGeometry(0.08, 0.08, 3.4, 16);
+      const exhaustL = new THREE.Mesh(exhaustGeom, chromeMat);
+      exhaustL.position.set(-0.95, 2.4, -0.7);
+      exhaustL.castShadow = true;
+      truck.add(exhaustL);
+
+      const exhaustR = exhaustL.clone();
+      exhaustR.position.x = 0.95;
+      truck.add(exhaustR);
+
+      // 2. Aerodynamic Cab-Over Cabin
+      const cabGroup = new THREE.Group();
+      const mainCabGeom = new THREE.BoxGeometry(2.45, 2.5, 2.5);
+      const mainCab = new THREE.Mesh(mainCabGeom, cabinMat);
+      mainCab.position.set(0, 2.25, 1.25);
+      mainCab.castShadow = true;
+      cabGroup.add(mainCab);
+
+      // Aerodynamic Roof Fairing
+      const roofGeom = new THREE.BoxGeometry(2.4, 0.6, 2.0);
+      const roofFairing = new THREE.Mesh(roofGeom, cabinMat);
+      roofFairing.position.set(0, 3.7, 1.1);
+      roofFairing.castShadow = true;
+      cabGroup.add(roofFairing);
+
+      // Front Radiator Grille
+      const grilleGeom = new THREE.BoxGeometry(1.8, 1.3, 0.12);
+      const grille = new THREE.Mesh(grilleGeom, darkTrimMat);
+      grille.position.set(0, 1.8, 2.52);
+      cabGroup.add(grille);
+
+      // Chrome Bull-Bar (Heavy-duty African bush protector)
+      const bullBarGeom = new THREE.TorusGeometry(0.9, 0.05, 8, 24, Math.PI);
+      const bullBar = new THREE.Mesh(bullBarGeom, chromeMat);
+      bullBar.position.set(0, 1.3, 2.7);
+      bullBar.rotation.x = -Math.PI / 2;
+      cabGroup.add(bullBar);
+
+      // Front Windshield
+      const windshieldGeom = new THREE.PlaneGeometry(2.2, 1.05);
+      const windshield = new THREE.Mesh(windshieldGeom, glassMat);
+      windshield.position.set(0, 2.75, 2.52);
+      windshield.rotation.x = -0.15;
+      cabGroup.add(windshield);
+
+      // Side Windows
+      const sideWinGeom = new THREE.PlaneGeometry(1.2, 0.85);
+      const winL = new THREE.Mesh(sideWinGeom, glassMat);
+      winL.position.set(-1.23, 2.75, 1.3);
+      winL.rotation.y = -Math.PI / 2;
+      cabGroup.add(winL);
+
+      const winR = winL.clone();
+      winR.position.x = 1.23;
+      winR.rotation.y = Math.PI / 2;
+      cabGroup.add(winR);
+
+      // Heavy Front Bumper
+      const bumperGeom = new THREE.BoxGeometry(2.55, 0.5, 0.4);
+      const bumper = new THREE.Mesh(bumperGeom, darkTrimMat);
+      bumper.position.set(0, 0.85, 2.55);
+      bumper.castShadow = true;
+      cabGroup.add(bumper);
+
+      // Headlight Clusters
+      const hlGeom = new THREE.BoxGeometry(0.4, 0.22, 0.1);
+      const hlL = new THREE.Mesh(hlGeom, headlightMat);
+      hlL.position.set(-0.95, 0.85, 2.76);
+      cabGroup.add(hlL);
+
+      const hlR = hlL.clone();
+      hlR.position.x = 0.95;
+      cabGroup.add(hlR);
+
+      // Spot Lights (Realistic Three.js Spotlights for night driving)
+      const spotL = new THREE.SpotLight(0xfffaed, 2.2, 90, Math.PI / 6, 0.35, 1.2);
+      spotL.position.set(-0.95, 0.9, 2.8);
+      spotL.target.position.set(-1.5, 0.2, 35);
+      spotL.castShadow = true;
+      spotL.visible = false;
+      cabGroup.add(spotL);
+      cabGroup.add(spotL.target);
+
+      const spotR = new THREE.SpotLight(0xfffaed, 2.2, 90, Math.PI / 6, 0.35, 1.2);
+      spotR.position.set(0.95, 0.9, 2.8);
+      spotR.target.position.set(1.5, 0.2, 35);
+      spotR.castShadow = true;
+      spotR.visible = false;
+      cabGroup.add(spotR);
+      cabGroup.add(spotR.target);
+
+      // Tail / Brake Lights
+      const tlGeom = new THREE.BoxGeometry(0.3, 0.15, 0.05);
+      const tlL = new THREE.Mesh(tlGeom, taillightMat);
+      tlL.position.set(-0.8, 0.8, -3.61);
+      truck.add(tlL);
+
+      const tlR = tlL.clone();
+      tlR.position.x = 0.8;
+      truck.add(tlR);
+
+      truck.add(cabGroup);
+
+      // 3. Wheels & Dual-Axle Suspension Setup (6x4: 1 Steering Axle, 2 Drive Axles)
+      const wheelGeom = new THREE.CylinderGeometry(0.52, 0.52, 0.38, 20);
+      wheelGeom.rotateZ(Math.PI / 2);
+      const rimGeom = new THREE.CylinderGeometry(0.28, 0.28, 0.39, 12);
+      rimGeom.rotateZ(Math.PI / 2);
+
+      function createWheelUnit() {
+        const wGroup = new THREE.Group();
+        const tire = new THREE.Mesh(wheelGeom, rubberMat);
+        tire.castShadow = true;
+        const rim = new THREE.Mesh(rimGeom, chromeMat);
+        wGroup.add(tire);
+        wGroup.add(rim);
+        return wGroup;
+      }
+
+      // Wheel Positions:
+      // Front Steer: Z = +2.2
+      // Drive Axle 1: Z = -1.3
+      // Drive Axle 2: Z = -2.6
+      const wheels = {
+        frontL: createWheelUnit(),
+        frontR: createWheelUnit(),
+        midL: createWheelUnit(),
+        midR: createWheelUnit(),
+        rearL: createWheelUnit(),
+        rearR: createWheelUnit(),
+      };
+
+      // Front Axle (Steered)
+      const steerPivotL = new THREE.Group();
+      steerPivotL.position.set(-1.18, 0.52, 2.2);
+      steerPivotL.add(wheels.frontL);
+      truck.add(steerPivotL);
+
+      const steerPivotR = new THREE.Group();
+      steerPivotR.position.set(1.18, 0.52, 2.2);
+      steerPivotR.add(wheels.frontR);
+      truck.add(steerPivotR);
+
+      // Dual Rear Axles (Non-steered drive wheels)
+      wheels.midL.position.set(-1.18, 0.52, -1.3);
+      wheels.midR.position.set(1.18, 0.52, -1.3);
+      wheels.rearL.position.set(-1.18, 0.52, -2.6);
+      wheels.rearR.position.set(1.18, 0.52, -2.6);
+
+      truck.add(wheels.midL);
+      truck.add(wheels.midR);
+      truck.add(wheels.rearL);
+      truck.add(wheels.rearR);
+
+      return {
+        mesh: truck,
+        cabGroup: cabGroup,
+        wheels: wheels,
+        steerL: steerPivotL,
+        steerR: steerPivotR,
+        spotL: spotL,
+        spotR: spotR,
+        taillightMat: taillightMat
+      };
+    }
+
+    const truck = createTruckTractor();
+    scene.add(truck.mesh);
+
+    // --- PROCEDURAL BOTSWANA A1 TERRAIN & ROAD NETWORK ---
+    // Generates a 2.5 km drivable corridor featuring:
+    // - Two-lane tar highway with broken yellow center lines and white verges (SADC standard)
+    // - Seamless branching gravel bypass route for heavy mining/bush transport testing
+    // - Kalahari orange-red terrain with elevation swells, acacia bushes, and baobabs
+    const WORLD_LENGTH = 3000;
+    const TAR_WIDTH = 10;
+    const GRAVEL_WIDTH = 8;
+
+    // Ground Terrain (Kalahari Red Sand Plane with micro-displacement)
+    const groundGeom = new THREE.PlaneGeometry(800, WORLD_LENGTH, 64, 256);
+    const groundMat = new THREE.MeshStandardMaterial({
+      color: 0xb85b2e, // Kalahari red sand
+      roughness: 0.95,
+      metalness: 0.05
+    });
+    // Add subtle procedural undulating rolling hills
+    const posAttr = groundGeom.attributes.position;
+    for (let i = 0; i < posAttr.count; i++) {
+      const x = posAttr.getX(i);
+      const y = posAttr.getY(i);
+      // Keep road center line flat while allowing hills on perimeter
+      const distFromCenter = Math.abs(x);
+      if (distFromCenter > 16) {
+        const hill = Math.sin(y * 0.012) * Math.cos(x * 0.015) * 6.5;
+        posAttr.setZ(i, hill);
+      }
+    }
+    groundGeom.computeVertexNormals();
+    groundGeom.rotateX(-Math.PI / 2);
+    const groundMesh = new THREE.Mesh(groundGeom, groundMat);
+    groundMesh.receiveShadow = true;
+    groundMesh.position.z = WORLD_LENGTH * 0.35;
+    scene.add(groundMesh);
+
+    // Drivable Tar Road Mesh (A1 Highway Corridor)
+    const tarGeom = new THREE.PlaneGeometry(TAR_WIDTH, WORLD_LENGTH);
+    tarGeom.rotateX(-Math.PI / 2);
+    const tarMat = new THREE.MeshStandardMaterial({
+      color: 0x24272c, // Aged bitumen
+      roughness: 0.8,
+      metalness: 0.1
+    });
+    const tarRoad = new THREE.Mesh(tarGeom, tarMat);
+    tarRoad.position.set(0, 0.02, WORLD_LENGTH * 0.35);
+    tarRoad.receiveShadow = true;
+    scene.add(tarRoad);
+
+    // Tar Road Markings: SADC Broken Yellow Center Line
+    const markingsGroup = new THREE.Group();
+    const dashGeom = new THREE.PlaneGeometry(0.18, 4.5);
+    dashGeom.rotateX(-Math.PI / 2);
+    const dashMat = new THREE.MeshBasicMaterial({ color: 0xf59e0b }); // SADC Yellow
+
+    for (let z = -WORLD_LENGTH * 0.15; z < WORLD_LENGTH * 0.85; z += 12) {
+      const dash = new THREE.Mesh(dashGeom, dashMat);
+      dash.position.set(0, 0.03, z);
+      markingsGroup.add(dash);
+    }
+
+    // Outer Edge White Solid Verge Lines
+    const edgeGeom = new THREE.PlaneGeometry(0.2, WORLD_LENGTH);
+    edgeGeom.rotateX(-Math.PI / 2);
+    const edgeMat = new THREE.MeshBasicMaterial({ color: 0xeeeeee });
+    const edgeL = new THREE.Mesh(edgeGeom, edgeMat);
+    edgeL.position.set(-TAR_WIDTH * 0.48, 0.03, WORLD_LENGTH * 0.35);
+    const edgeR = new THREE.Mesh(edgeGeom, edgeMat);
+    edgeR.position.set(TAR_WIDTH * 0.48, 0.03, WORLD_LENGTH * 0.35);
+    markingsGroup.add(edgeL);
+    markingsGroup.add(edgeR);
+    scene.add(markingsGroup);
+
+    // Parallel Branching Gravel Track (Botswana Bush Cut-through)
+    // Runs alongside the highway from Z = 200 to Z = 1200 with connecting bends
+    const gravelCurve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(TAR_WIDTH * 0.5, 0.03, 150),
+      new THREE.Vector3(22, 0.03, 300),
+      new THREE.Vector3(34, 0.03, 600),
+      new THREE.Vector3(26, 0.03, 900),
+      new THREE.Vector3(TAR_WIDTH * 0.5, 0.03, 1150),
+    ]);
+    const gravelGeom = new THREE.TubeGeometry(gravelCurve, 64, 4.5, 6, false);
+    const gravelMat = new THREE.MeshStandardMaterial({
+      color: 0x824b2b, // Crushed calcrete/gravel ochre
+      roughness: 0.98,
+      metalness: 0.02
+    });
+    const gravelRoad = new THREE.Mesh(gravelGeom, gravelMat);
+    gravelRoad.scale.y = 0.02; // Flatten tube into drivable strip
+    gravelRoad.receiveShadow = true;
+    scene.add(gravelRoad);
+
+    // Procedural African Savannah Flora (Acacia low-poly umbrellas & Baobabs)
+    const floraGroup = new THREE.Group();
+    const trunkMat = new THREE.MeshStandardMaterial({ color: 0x4a3525, roughness: 0.9 });
+    const canopyMat = new THREE.MeshStandardMaterial({ color: 0x606934, roughness: 0.9 }); // Olive dry foliage
+
+    function spawnAcacia(x, z) {
+      const tree = new THREE.Group();
+      const trunkGeom = new THREE.CylinderGeometry(0.2, 0.4, 4, 6);
+      const trunk = new THREE.Mesh(trunkGeom, trunkMat);
+      trunk.position.y = 2;
+      trunk.castShadow = true;
+      tree.add(trunk);
+
+      // Distinct flat umbrella canopy
+      const c1Geom = new THREE.CylinderGeometry(4.2, 2.5, 0.8, 7);
+      const c1 = new THREE.Mesh(c1Geom, canopyMat);
+      c1.position.y = 4.2;
+      c1.castShadow = true;
+      tree.add(c1);
+
+      tree.position.set(x, 0, z);
+      return tree;
+    }
+
+    // Populate roadside scenery with randomized clearance around roadways
+    for (let i = 0; i < 180; i++) {
+      const side = Math.random() > 0.5 ? 1 : -1;
+      const x = (Math.random() * 260 + 16) * side;
+      const z = Math.random() * WORLD_LENGTH - 300;
+      floraGroup.add(spawnAcacia(x, z));
+    }
+    scene.add(floraGroup);
+
+    // Roadside Distance & Direction Signs (SADC Green/Blue highway signs)
+    function createRoadSign(text, x, z) {
+      const signGroup = new THREE.Group();
+      const postGeom = new THREE.CylinderGeometry(0.08, 0.08, 4, 8);
+      const post = new THREE.Mesh(postGeom, trunkMat);
+      post.position.y = 2;
+      signGroup.add(post);
+
+      const boardGeom = new THREE.BoxGeometry(3.5, 1.8, 0.1);
+      const boardMat = new THREE.MeshStandardMaterial({ color: 0x046a38 }); // SADC green
+      const board = new THREE.Mesh(boardGeom, boardMat);
+      board.position.y = 3.2;
+
+      // Text Canvas
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 256;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#046a38';
+      ctx.fillRect(0, 0, 512, 256);
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 10;
+      ctx.strokeRect(10, 10, 492, 236);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 44px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(text, 256, 110);
+      ctx.font = '32px sans-serif';
+      ctx.fillText('A1 HIGHWAY', 256, 175);
+
+      const tex = new THREE.CanvasTexture(canvas);
+      const labelMat = new THREE.MeshBasicMaterial({ map: tex });
+      const labelMesh = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 1.7), labelMat);
+      labelMesh.position.set(0, 3.2, 0.06);
+
+      signGroup.add(board);
+      signGroup.add(labelMesh);
+      signGroup.position.set(x, 0, z);
+      return signGroup;
+    }
+
+    scene.add(createRoadSign('PALAPYE 110 km', -7.5, 80));
+    scene.add(createRoadSign('FRANCISTOWN 280 km', -7.5, 520));
+    scene.add(createRoadSign('GRAVEL BYPASS 500m', 7.5, 100));
+
+    // --- MULTIMODAL COMMERCIAL VEHICLE PHYSICS SOLVER ---
+    const physics = {
+      // Vehicle State
+      pos: new THREE.Vector3(2.5, 0, 20), // Start on left side (SADC left-hand drive standard)
+      velocity: new THREE.Vector3(0, 0, 0),
+      heading: 0, // Radians rotation around Y-axis
+      steerAngle: 0,
+      wheelAngularVel: 0,
+
+      // Mechanical Parameters
+      mass: 8800, // kg (Empty 6x4 tractor unit)
+      maxEngineTorque: 2800, // Nm (V8 Turbo Diesel)
+      brakeForce: 14000,
+      dragCoeff: 0.72,
+      rollingResistance: 0.015,
+
+      // Transmission
+      gear: 'D', // 'D', 'N', 'R'
+      rpm: 650,
+      idleRpm: 650,
+      maxRpm: 2400,
+
+      // Inputs
+      throttleInput: 0,
+      brakeInput: 0,
+      steerInput: 0,
+
+      // Surface detection
+      currentSurface: 'TAR',
+      frictionCoeff: 1.0,
+
+      // Cabin Suspension Sway Dynamics
+      cabPitch: 0,
+      cabRoll: 0
+    };
+
+    // --- SURFACE SAMPLER ---
+    function inspectSurface(x, z) {
+      // Tar highway corridor bounds
+      if (Math.abs(x) <= TAR_WIDTH * 0.5) {
+        return { type: 'TAR HIGHWAY', friction: 1.0, rollResist: 0.015, color: '#22c55e' };
+      }
+      // Check gravel bypass route proximity
+      if (z >= 140 && z <= 1180 && x > TAR_WIDTH * 0.5 && x < 45) {
+        return { type: 'GRAVEL / DIRT', friction: 0.58, rollResist: 0.045, color: '#f59e0b' };
+      }
+      // Off-road Kalahari Sand
+      return { type: 'KALAHARI SAND', friction: 0.42, rollResist: 0.085, color: '#ef4444' };
+    }
+
+    // --- INPUT CONTROLLER (TOUCH + DESKTOP) ---
+    const keys = { w: false, s: false, a: false, d: false, space: false };
+
+    window.addEventListener('keydown', (e) => {
+      if (e.repeat) return;
+      if (e.key === 'w' || e.key === 'ArrowUp') keys.w = true;
+      if (e.key === 's' || e.key === 'ArrowDown') keys.s = true;
+      if (e.key === 'a' || e.key === 'ArrowLeft') keys.a = true;
+      if (e.key === 'd' || e.key === 'ArrowRight') keys.d = true;
+      if (e.code === 'Space') keys.space = true;
+      if (e.key === 'c' || e.key === 'C') toggleCamera();
+      if (e.key === 'l' || e.key === 'L') toggleLights();
+      if (e.key === 'h' || e.key === 'H') setHorn(true);
+      if (e.key === 'r' || e.key === 'R') toggleGear();
+    });
+
+    window.addEventListener('keyup', (e) => {
+      if (e.key === 'w' || e.key === 'ArrowUp') keys.w = false;
+      if (e.key === 's' || e.key === 'ArrowDown') keys.s = false;
+      if (e.key === 'a' || e.key === 'ArrowLeft') keys.a = false;
+      if (e.key === 'd' || e.key === 'ArrowRight') keys.d = false;
+      if (e.code === 'Space') keys.space = false;
+      if (e.key === 'h' || e.key === 'H') setHorn(false);
+    });
+
+    // Mobile Virtual Touch Handlers
+    function bindTouch(id, onDown, onUp) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener('touchstart', (e) => { e.preventDefault(); onDown(); el.classList.add('active'); }, { passive: false });
+      el.addEventListener('touchend', (e) => { e.preventDefault(); onUp(); el.classList.remove('active'); }, { passive: false });
+      el.addEventListener('mousedown', () => { onDown(); el.classList.add('active'); });
+      el.addEventListener('mouseup', () => { onUp(); el.classList.remove('active'); });
+    }
+
+    bindTouch('btn-gas', () => { keys.w = true; }, () => { keys.w = false; });
+    bindTouch('btn-brake', () => { keys.s = true; }, () => { keys.s = false; });
+    bindTouch('btn-left', () => { keys.a = true; }, () => { keys.a = false; });
+    bindTouch('btn-right', () => { keys.d = true; }, () => { keys.d = false; });
+
+    document.getElementById('btn-gear').addEventListener('click', toggleGear);
+    document.getElementById('cam-btn').addEventListener('click', toggleCamera);
+    document.getElementById('light-btn').addEventListener('click', toggleLights);
+
+    const hornBtn = document.getElementById('horn-btn');
+    hornBtn.addEventListener('mousedown', () => setHorn(true));
+    hornBtn.addEventListener('mouseup', () => setHorn(false));
+    hornBtn.addEventListener('touchstart', (e) => { e.preventDefault(); setHorn(true); }, { passive: false });
+    hornBtn.addEventListener('touchend', (e) => { e.preventDefault(); setHorn(false); }, { passive: false });
+
+    function toggleGear() {
+      if (physics.gear === 'D') {
+        physics.gear = 'R';
+      } else {
+        physics.gear = 'D';
+      }
+      document.getElementById('gear-txt').innerText = physics.gear;
+      audio.playAirBrakeHiss();
+    }
+
+    let lightsActive = false;
+    function toggleLights() {
+      lightsActive = !lightsActive;
+      truck.spotL.visible = lightsActive;
+      truck.spotR.visible = lightsActive;
+    }
+
+    function setHorn(val) {
+      audio.setHorn(val);
+    }
+
+    // --- CAMERA SYSTEM (CHASE, CABIN, BUMPER) ---
+    let cameraMode = 0; // 0: Chase (Third Person), 1: Interior/Cabin, 2: Front Bumper
+    function toggleCamera() {
+      cameraMode = (cameraMode + 1) % 3;
+    }
+
+    const cameraDampedPos = new THREE.Vector3(0, 5, -12);
+    const cameraLookTarget = new THREE.Vector3(0, 2, 0);
+
+    function updateCamera(dt) {
+      const truckPos = truck.mesh.position;
+      const truckRot = truck.mesh.rotation.y;
+
+      if (cameraMode === 0) {
+        // High chase camera with dynamic follow lag
+        const offset = new THREE.Vector3(0, 3.8, -10.5);
+        offset.applyAxisAngle(new THREE.Vector3(0, 1, 0), truckRot);
+        const desiredPos = truckPos.clone().add(offset);
+        cameraDampedPos.lerp(desiredPos, 8.0 * dt);
+        camera.position.copy(cameraDampedPos);
+
+        const lookAtTarget = truckPos.clone().add(new THREE.Vector3(0, 1.8, 4.0).applyAxisAngle(new THREE.Vector3(0, 1, 0), truckRot));
+        cameraLookTarget.lerp(lookAtTarget, 10.0 * dt);
+        camera.lookAt(cameraLookTarget);
+
+      } else if (cameraMode === 1) {
+        // First-Person Driver Cabin View (Botswana Right-Hand Drive cab position)
+        const cabinOffset = new THREE.Vector3(0.58, 2.75, 1.4); // Driver seat on right
+        cabinOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), truckRot);
+        camera.position.copy(truckPos.clone().add(cabinOffset));
+
+        const forwardTarget = new THREE.Vector3(0.58, 2.7, 24);
+        forwardTarget.applyAxisAngle(new THREE.Vector3(0, 1, 0), truckRot);
+        camera.lookAt(truckPos.clone().add(forwardTarget));
+
+      } else if (cameraMode === 2) {
+        // Front Low Bumper Cam for high-speed perspective
+        const bumperOffset = new THREE.Vector3(0, 0.9, 2.85);
+        bumperOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), truckRot);
+        camera.position.copy(truckPos.clone().add(bumperOffset));
+
+        const target = new THREE.Vector3(0, 0.85, 30);
+        target.applyAxisAngle(new THREE.Vector3(0, 1, 0), truckRot);
+        camera.lookAt(truckPos.clone().add(target));
+      }
+    }
+
+    // --- SOUND INSTANCE ---
+    const audio = new TruckAudioSystem();
+    document.getElementById('start-btn').addEventListener('click', () => {
+      audio.init();
+      document.getElementById('audio-gate').style.display = 'none';
+      audio.playAirBrakeHiss();
+    });
+
+    // --- MAIN PHYSICS & SIMULATION TICK ---
+    let lastTime = performance.now();
+    let frameCounter = 0;
+    let fpsTimer = 0;
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      const now = performance.now();
+      const dt = Math.min((now - lastTime) / 1000, 0.05); // Cap to 50ms to prevent spiral of death
+      lastTime = now;
+
+      // FPS Tracker
+      frameCounter++;
+      fpsTimer += dt;
+      if (fpsTimer >= 0.5) {
+        document.getElementById('fps-txt').innerText = Math.round(frameCounter / fpsTimer);
+        frameCounter = 0;
+        fpsTimer = 0;
+      }
+
+      // 1. Process Driver Inputs with Mechanical Inertia
+      const targetThrottle = keys.w ? 1.0 : 0.0;
+      const targetBrake = keys.s ? 1.0 : (keys.space ? 1.0 : 0.0);
+      physics.throttleInput += (targetThrottle - physics.throttleInput) * Math.min(1.0, 6.0 * dt);
+      physics.brakeInput += (targetBrake - physics.brakeInput) * Math.min(1.0, 10.0 * dt);
+
+      // Steering wheel rate of return & progressive lock angle
+      let targetSteer = 0;
+      if (keys.a) targetSteer += 0.52; // ~30 degrees max steer
+      if (keys.d) targetSteer -= 0.52;
+      physics.steerAngle += (targetSteer - physics.steerAngle) * Math.min(1.0, 4.5 * dt);
+
+      // Visual front wheel steering rack geometry
+      truck.steerL.rotation.y = physics.steerAngle;
+      truck.steerR.rotation.y = physics.steerAngle;
+
+      // 2. Surface Inspection Under Tractor Chassis
+      const surface = inspectSurface(physics.pos.x, physics.pos.z);
+      physics.currentSurface = surface.type;
+      physics.frictionCoeff = surface.friction;
+
+      // 3. Powertrain & Tractive Force Calculation
+      const forwardDir = new THREE.Vector3(Math.sin(physics.heading), 0, Math.cos(physics.heading));
+      const speed = physics.velocity.dot(forwardDir); // Speed along heading (+ is forward, - is reverse)
+      const speedKmh = Math.abs(speed * 3.6);
+
+      // Simulated Automatic Transmission RPM calculation
+      let gearRatio = 1.0;
+      if (physics.gear === 'D') {
+        if (speedKmh < 18) gearRatio = 3.6;
+        else if (speedKmh < 38) gearRatio = 2.4;
+        else if (speedKmh < 62) gearRatio = 1.5;
+        else gearRatio = 0.95;
+      } else {
+        gearRatio = -3.2; // Reverse gear ratio
+      }
+
+      const engineTargetRpm = physics.idleRpm + (speedKmh * 22 * Math.abs(gearRatio)) + (physics.throttleInput * 500);
+      physics.rpm += (Math.min(physics.maxRpm, engineTargetRpm) - physics.rpm) * Math.min(1.0, 5.0 * dt);
+
+      // Net Forward Force
+      let driveForce = 0;
+      if (physics.gear === 'D') {
+        driveForce = physics.throttleInput * (physics.maxEngineTorque * gearRatio) * physics.frictionCoeff;
+      } else if (physics.gear === 'R') {
+        driveForce = -physics.throttleInput * (physics.maxEngineTorque * Math.abs(gearRatio)) * physics.frictionCoeff;
+      }
+
+      // Braking and Retarder Force
+      let brakeForceTotal = 0;
+      if (physics.brakeInput > 0.05) {
+        brakeForceTotal = Math.sign(speed) * physics.brakeForce * physics.brakeInput * physics.frictionCoeff;
+        truck.taillightMat.emissive.setHex(0xff1111);
+      } else {
+        truck.taillightMat.emissive.setHex(0x000000);
+      }
+
+      // Air Drag and Rolling Resistance
+      const aeroDragForce = 0.5 * 1.225 * physics.dragCoeff * 6.5 * (speed * speed) * Math.sign(speed);
+      const rollResistForce = physics.mass * 9.81 * surface.rollResist * Math.sign(speed);
+
+      const netForwardForce = driveForce - brakeForceTotal - aeroDragForce - rollResistForce;
+      const forwardAcceleration = netForwardForce / physics.mass;
+
+      // Update linear velocity
+      const accelVec = forwardDir.clone().multiplyScalar(forwardAcceleration * dt);
+      physics.velocity.add(accelVec);
+
+      // Lateral Grip Decay (Prevents unrealistic drifting, simulates heavy tire grip)
+      const lateralDir = new THREE.Vector3(Math.cos(physics.heading), 0, -Math.sin(physics.heading));
+      const lateralSpeed = physics.velocity.dot(lateralDir);
+      const lateralCorrection = lateralDir.clone().multiplyScalar(-lateralSpeed * 8.0 * physics.frictionCoeff * dt);
+      physics.velocity.add(lateralCorrection);
+
+      // 4. Kinematic Steering / Turning
+      // Heavy truck turning radius based on wheelbase length L = 4.8m
+      const wheelbase = 4.8;
+      const turnAngularVelocity = (speed / wheelbase) * Math.tan(physics.steerAngle);
+      physics.heading += turnAngularVelocity * dt;
+
+      // Advance Position
+      physics.pos.add(physics.velocity.clone().multiplyScalar(dt));
+
+      // Reset loop when reaching the end of the corridor to maintain seamless testing
+      if (physics.pos.z > WORLD_LENGTH * 0.8) {
+        physics.pos.z = -100;
+      }
+
+      // Apply to Three.js Object Matrix
+      truck.mesh.position.copy(physics.pos);
+      truck.mesh.rotation.y = physics.heading;
+
+      // 5. Wheel Rotation Animation
+      const wheelCircumference = Math.PI * 1.04;
+      const wheelRotDelta = (speed * dt / wheelCircumference) * (Math.PI * 2);
+      truck.wheels.frontL.rotation.x += wheelRotDelta;
+      truck.wheels.frontR.rotation.x += wheelRotDelta;
+      truck.wheels.midL.rotation.x += wheelRotDelta;
+      truck.wheels.midR.rotation.x += wheelRotDelta;
+      truck.wheels.rearL.rotation.x += wheelRotDelta;
+      truck.wheels.rearR.rotation.x += wheelRotDelta;
+
+      // 6. Cabin Suspension Inertial Sway Simulation
+      // Cabin leans backward during acceleration, forward during braking, roll during turns
+      const targetPitch = -forwardAcceleration * 0.012;
+      const targetRoll = -turnAngularVelocity * 0.18;
+      physics.cabPitch += (targetPitch - physics.cabPitch) * Math.min(1.0, 6.0 * dt);
+      physics.cabRoll += (targetRoll - physics.cabRoll) * Math.min(1.0, 6.0 * dt);
+      truck.cabGroup.rotation.x = physics.cabPitch;
+      truck.cabGroup.rotation.z = physics.cabRoll;
+
+      // 7. Update Audio Synthesizer
+      audio.update(physics.rpm, physics.throttleInput, speedKmh);
+
+      // 8. Update Camera Position and Aim
+      updateCamera(dt);
+
+      // 9. Update Real-Time HUD
+      document.getElementById('speed-txt').innerText = Math.round(speedKmh);
+      document.getElementById('rpm-txt').innerText = Math.round(physics.rpm);
+      const surfaceTxtEl = document.getElementById('surface-txt');
+      surfaceTxtEl.innerText = surface.type;
+      surfaceTxtEl.style.color = surface.color;
+
+      renderer.render(scene, camera);
+    }
+
+    // Window Resize Handler
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // Start Simulation Loop
+    animate();
+  </script>
+</body>
+</html>
