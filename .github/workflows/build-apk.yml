@@ -23,12 +23,12 @@ jobs:
         with:
           gradle-version: '8.5'
 
-      - name: Auto-Configure Complete Android Shell
+      - name: Auto-Configure Complete Android Shell & Embed Game
         run: |
           mkdir -p app/src/main/assets/www/js
           mkdir -p app/src/main/java/com/africatruckking/game
 
-          # 1. gradle.properties (CRITICAL: Enables AndroidX support)
+          # 1. gradle.properties
           cat << 'EOF' > gradle.properties
           android.useAndroidX=true
           android.enableJetifier=true
@@ -76,8 +76,8 @@ jobs:
                   applicationId "com.africatruckking.game"
                   minSdk 24
                   targetSdk 34
-                  versionCode 1
-                  versionName "0.2.1"
+                  versionCode 2
+                  versionName "0.2.2"
               }
 
               buildTypes {
@@ -102,7 +102,7 @@ jobs:
           }
           EOF
 
-          # 5. Bulletproof AndroidManifest
+          # 5. AndroidManifest.xml
           cat << 'EOF' > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -112,7 +112,6 @@ jobs:
                   android:allowBackup="true"
                   android:icon="@android:drawable/sym_def_app_icon"
                   android:label="Africa Truck King"
-                  android:supportsRtl="true"
                   android:hardwareAccelerated="true"
                   android:theme="@android:style/Theme.NoTitleBar.Fullscreen">
 
@@ -131,7 +130,7 @@ jobs:
           </manifest>
           EOF
 
-          # 6. MainActivity.java
+          # 6. MainActivity.java (Direct Local Offline Asset Loading)
           cat << 'EOF' > app/src/main/java/com/africatruckking/game/MainActivity.java
           package com.africatruckking.game;
 
@@ -143,26 +142,18 @@ jobs:
           import android.view.WindowInsets;
           import android.view.WindowInsetsController;
           import android.view.WindowManager;
-          import android.webkit.WebResourceRequest;
-          import android.webkit.WebResourceResponse;
           import android.webkit.WebSettings;
           import android.webkit.WebView;
-          import androidx.webkit.WebViewAssetLoader;
-          import androidx.webkit.WebViewClientCompat;
+          import android.webkit.WebViewClient;
 
           public class MainActivity extends Activity {
               private WebView mWebView;
-              private WebViewAssetLoader mAssetLoader;
 
               @SuppressLint("SetJavaScriptEnabled")
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
                   getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-
-                  mAssetLoader = new WebViewAssetLoader.Builder()
-                          .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this))
-                          .build();
 
                   mWebView = new WebView(this);
                   setContentView(mWebView);
@@ -173,18 +164,16 @@ jobs:
                   settings.setDomStorageEnabled(true);
                   settings.setDatabaseEnabled(true);
                   settings.setMediaPlaybackRequiresUserGesture(false);
-                  settings.setAllowFileAccess(false);
-                  settings.setAllowContentAccess(false);
+                  settings.setAllowFileAccess(true);
+                  settings.setAllowContentAccess(true);
+                  settings.setAllowFileAccessFromFileURLs(true);
+                  settings.setAllowUniversalAccessFromFileURLs(true);
                   mWebView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
 
-                  mWebView.setWebViewClient(new WebViewClientCompat() {
-                      @Override
-                      public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
-                          return mAssetLoader.shouldInterceptRequest(request.getUrl());
-                      }
-                  });
+                  mWebView.setWebViewClient(new WebViewClient());
 
-                  mWebView.loadUrl("https://appassets.androidplatform.net/assets/www/index.html");
+                  // Load local game asset directly
+                  mWebView.loadUrl("file:///android_asset/www/index.html");
               }
 
               private void applyImmersive() {
@@ -244,7 +233,646 @@ jobs:
           }
           EOF
 
-          # 7. Download Three.js locally
+          # 7. Embed the Full 3D Truck Game into the APK Assets
+          cat << 'EOF' > app/src/main/assets/www/index.html
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+            <meta charset="UTF-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+            <title>AFRICA TRUCK KING</title>
+            <style>
+              * { box-sizing: border-box; user-select: none; -webkit-user-select: none; margin: 0; padding: 0; }
+              html, body { width: 100%; height: 100%; overflow: hidden; background-color: #000; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+              #canvas-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+              #hud-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; padding: 8px 14px; }
+              .hud-card { background: rgba(15, 20, 28, 0.85); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 8px; color: #f1f5f9; pointer-events: auto; }
+              #top-bar { display: flex; justify-content: space-between; align-items: center; padding: 6px 12px; font-size: 11px; }
+              .brand-title { color: #f59e0b; font-weight: 900; letter-spacing: 1px; }
+              .action-btn { padding: 6px 10px; font-size: 11px; font-weight: 700; border-radius: 5px; background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(255,255,255,0.2); color: #fff; cursor: pointer; }
+              #cluster { align-self: center; display: flex; gap: 14px; padding: 6px 18px; align-items: baseline; border-bottom: 3px solid #f59e0b; }
+              .gauge { display: flex; flex-direction: column; align-items: center; }
+              .gauge-val { font-size: 26px; font-weight: 900; font-family: monospace; color: #38bdf8; min-width: 50px; text-align: center; }
+              .gauge-unit { font-size: 8px; color: #94a3b8; }
+              .gear-box { font-size: 26px; font-weight: 900; color: #22c55e; min-width: 26px; text-align: center; }
+              #touch-controls { display: flex; justify-content: space-between; align-items: flex-end; width: 100%; pointer-events: none; margin-bottom: 4px; }
+              .touch-group { display: flex; gap: 10px; pointer-events: auto; }
+              .touch-circle { width: 66px; height: 66px; border-radius: 50%; background: rgba(30, 41, 59, 0.88); border: 2px solid rgba(245, 158, 11, 0.5); color: #fff; font-weight: 800; font-size: 11px; display: flex; align-items: center; justify-content: center; flex-direction: column; touch-action: none; }
+              .touch-circle.active { background: #f59e0b !important; color: #000 !important; transform: scale(0.95); }
+              .pedal { width: 70px; height: 102px; border-radius: 12px; }
+              .pedal-acc { background: linear-gradient(180deg, #1e293b 0%, #15803d 100%); border-color: #22c55e; }
+              .pedal-brk { background: linear-gradient(180deg, #1e293b 0%, #b91c1c 100%); border-color: #ef4444; }
+              .modal-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(8, 10, 14, 0.94); z-index: 100; display: flex; flex-direction: column; justify-content: center; align-items: center; color: #fff; text-align: center; padding: 20px; }
+              .modal-card { max-width: 420px; background: rgba(18, 24, 34, 0.95); border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 12px; padding: 20px; }
+              .modal-btn { background: #f59e0b; color: #000; padding: 12px 24px; border: none; font-size: 14px; font-weight: 800; border-radius: 8px; cursor: pointer; margin: 4px; }
+              #pause-menu { display: none; }
+            </style>
+            <script src="js/three.min.js"></script>
+          </head>
+          <body>
+            <div id="canvas-container"></div>
+
+            <div id="start-modal" class="modal-overlay">
+              <div class="modal-card">
+                <h1 style="color:#f59e0b; margin-bottom:8px;">AFRICA TRUCK KING</h1>
+                <p style="color:#94a3b8; font-size:13px; margin-bottom:16px;">
+                  Botswana Corridor Driving Simulator<br/>A1 Highway test sector with continuous gravel bypass and physical tractor unit.
+                </p>
+                <button id="btn-start" class="modal-btn">IGNITION & START</button>
+              </div>
+            </div>
+
+            <div id="pause-menu" class="modal-overlay">
+              <div class="modal-card">
+                <h2 style="color:#f59e0b; margin-bottom:12px;">SIMULATION PAUSED</h2>
+                <button id="btn-resume" class="modal-btn">RESUME DRIVING</button>
+                <button id="btn-recover" class="modal-btn" style="background:#334155; color:#fff;">RECOVER TRUCK</button>
+              </div>
+            </div>
+
+            <div id="hud-overlay">
+              <div id="top-bar" class="hud-card">
+                <div class="brand-title">Africa Truck King</div>
+                <div style="font-family: monospace; color:#94a3b8;">SURFACE: <b id="surface-txt" style="color:#22c55e">TAR</b></div>
+                <div style="display:flex; gap:6px;">
+                  <button class="action-btn" id="btn-cam">CAM</button>
+                  <button class="action-btn" id="btn-lights">LIGHTS</button>
+                  <button class="action-btn" id="btn-horn">HORN</button>
+                  <button class="action-btn" id="btn-pause-toggle">PAUSE</button>
+                </div>
+              </div>
+
+              <div id="cluster" class="hud-card">
+                <div class="gauge">
+                  <div class="gear-box" id="gear-txt">D</div>
+                  <div class="gauge-unit">GEAR</div>
+                </div>
+                <div class="gauge">
+                  <div class="gauge-val" id="speed-txt">0</div>
+                  <div class="gauge-unit">KM / H</div>
+                </div>
+                <div class="gauge">
+                  <div class="gauge-val" id="rpm-txt" style="color:#f59e0b">650</div>
+                  <div class="gauge-unit">RPM</div>
+                </div>
+              </div>
+
+              <div id="touch-controls">
+                <div class="touch-group">
+                  <div class="touch-circle" id="touch-left">◀<br/>STEER</div>
+                  <div class="touch-circle" id="touch-right">STEER<br/>▶</div>
+                </div>
+                <div class="touch-group">
+                  <div class="touch-circle" id="touch-gear" style="border-radius:10px; width:52px; height:52px;">D/N/R</div>
+                </div>
+                <div class="touch-group">
+                  <div class="touch-circle pedal pedal-brk" id="touch-brake">BRAKE<br/>▼</div>
+                  <div class="touch-circle pedal pedal-acc" id="touch-gas">GAS<br/>▲</div>
+                </div>
+              </div>
+            </div>
+
+            <script>
+              'use strict';
+
+              class TruckAudioSystem {
+                constructor() {
+                  this.ctx = null;
+                  this.masterGain = null;
+                  this.engineOsc1 = null;
+                  this.engineOsc2 = null;
+                  this.engineFilter = null;
+                  this.engineGain = null;
+                  this.turboOsc = null;
+                  this.turboGain = null;
+                  this.hornGain = null;
+                  this.initialized = false;
+                }
+                init() {
+                  if (this.initialized) {
+                    if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+                    return;
+                  }
+                  try {
+                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                    this.ctx = new AudioCtx();
+                    this.masterGain = this.ctx.createGain();
+                    this.masterGain.gain.setValueAtTime(0.65, this.ctx.currentTime);
+                    this.masterGain.connect(this.ctx.destination);
+
+                    this.engineOsc1 = this.ctx.createOscillator();
+                    this.engineOsc1.type = 'sawtooth';
+                    this.engineOsc1.frequency.setValueAtTime(28, this.ctx.currentTime);
+
+                    this.engineOsc2 = this.ctx.createOscillator();
+                    this.engineOsc2.type = 'triangle';
+                    this.engineOsc2.frequency.setValueAtTime(14, this.ctx.currentTime);
+
+                    this.engineFilter = this.ctx.createBiquadFilter();
+                    this.engineFilter.type = 'lowpass';
+                    this.engineFilter.frequency.setValueAtTime(170, this.ctx.currentTime);
+                    this.engineFilter.Q.setValueAtTime(3.0, this.ctx.currentTime);
+
+                    this.engineGain = this.ctx.createGain();
+                    this.engineGain.gain.setValueAtTime(0.28, this.ctx.currentTime);
+
+                    this.engineOsc1.connect(this.engineFilter);
+                    this.engineOsc2.connect(this.engineFilter);
+                    this.engineFilter.connect(this.engineGain);
+                    this.engineGain.connect(this.masterGain);
+
+                    this.turboOsc = this.ctx.createOscillator();
+                    this.turboOsc.type = 'sine';
+                    this.turboGain = this.ctx.createGain();
+                    this.turboGain.gain.setValueAtTime(0.001, this.ctx.currentTime);
+                    this.turboOsc.connect(this.turboGain);
+                    this.turboGain.connect(this.masterGain);
+
+                    const h1 = this.ctx.createOscillator();
+                    const h2 = this.ctx.createOscillator();
+                    h1.type = 'sawtooth'; h1.frequency.setValueAtTime(370, this.ctx.currentTime);
+                    h2.type = 'sawtooth'; h2.frequency.setValueAtTime(440, this.ctx.currentTime);
+                    this.hornGain = this.ctx.createGain();
+                    this.hornGain.gain.setValueAtTime(0.0, this.ctx.currentTime);
+                    h1.connect(this.hornGain); h2.connect(this.hornGain);
+                    this.hornGain.connect(this.masterGain);
+
+                    this.engineOsc1.start(); this.engineOsc2.start(); this.turboOsc.start();
+                    h1.start(); h2.start();
+                    this.initialized = true;
+                  } catch (e) {
+                    console.warn('Audio Init Warning:', e);
+                  }
+                }
+                update(rpm, throttle, isMuted) {
+                  if (!this.initialized || !this.ctx || this.ctx.state !== 'running' || isMuted) return;
+                  const fundamentalFreq = Math.max(16, (rpm / 60) * 4);
+                  this.engineOsc1.frequency.setTargetAtTime(fundamentalFreq, this.ctx.currentTime, 0.04);
+                  this.engineOsc2.frequency.setTargetAtTime(fundamentalFreq * 0.5, this.ctx.currentTime, 0.04);
+
+                  const filterCutoff = 130 + (rpm / 2400) * 420 + (throttle * 280);
+                  this.engineFilter.frequency.setTargetAtTime(filterCutoff, this.ctx.currentTime, 0.04);
+
+                  const engineVol = 0.22 + (throttle * 0.25) + (rpm / 2400) * 0.12;
+                  this.engineGain.gain.setTargetAtTime(engineVol, this.ctx.currentTime, 0.04);
+
+                  const turboFreq = 1100 + (rpm / 2400) * 2000;
+                  const turboVol = Math.max(0.001, throttle * 0.05 * (rpm / 1400));
+                  this.turboOsc.frequency.setTargetAtTime(turboFreq, this.ctx.currentTime, 0.06);
+                  this.turboGain.gain.setTargetAtTime(turboVol, this.ctx.currentTime, 0.06);
+                }
+                playAirBrakeHiss() {
+                  if (!this.initialized || !this.ctx || this.ctx.state !== 'running') return;
+                  try {
+                    const bufferSize = Math.floor(this.ctx.sampleRate * 0.35);
+                    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                    const data = buffer.getChannelData(0);
+                    for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.28));
+                    const noise = this.ctx.createBufferSource();
+                    noise.buffer = buffer;
+                    const filter = this.ctx.createBiquadFilter();
+                    filter.type = 'bandpass'; filter.frequency.value = 2200; filter.Q.value = 1.0;
+                    const gain = this.ctx.createGain();
+                    gain.gain.setValueAtTime(0.18, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.34);
+                    noise.connect(filter); filter.connect(gain); gain.connect(this.masterGain);
+                    noise.start();
+                  } catch (_) {}
+                }
+                setHorn(active) {
+                  if (!this.initialized || !this.ctx) return;
+                  this.hornGain.gain.setTargetAtTime(active ? 0.35 : 0.0, this.ctx.currentTime, 0.03);
+                }
+              }
+
+              const container = document.getElementById('canvas-container');
+              const scene = new THREE.Scene();
+              scene.background = new THREE.Color(0xaed3ec);
+              scene.fog = new THREE.FogExp2(0xc7e0f2, 0.0018);
+
+              const camera = new THREE.PerspectiveCamera(58, window.innerWidth / window.innerHeight, 0.3, 1500);
+              const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
+              renderer.setSize(window.innerWidth, window.innerHeight);
+              renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
+              renderer.shadowMap.enabled = true;
+              renderer.shadowMap.type = THREE.PCFShadowMap;
+              container.appendChild(renderer.domElement);
+
+              const hemiLight = new THREE.HemisphereLight(0xfff5ea, 0x825432, 0.65);
+              scene.add(hemiLight);
+
+              const sunLight = new THREE.DirectionalLight(0xfff7ed, 1.35);
+              sunLight.position.set(100, 150, 70);
+              sunLight.castShadow = true;
+              sunLight.shadow.mapSize.set(1024, 1024);
+              sunLight.shadow.camera.near = 10;
+              sunLight.shadow.camera.far = 380;
+              sunLight.shadow.camera.left = -50; sunLight.shadow.camera.right = 50;
+              sunLight.shadow.camera.top = 50; sunLight.shadow.camera.bottom = -50;
+              scene.add(sunLight);
+
+              function buildDetailedTruck() {
+                const truck = new THREE.Group();
+                const cabMat = new THREE.MeshStandardMaterial({ color: 0xba3214, roughness: 0.3, metalness: 0.3 });
+                const chassisMat = new THREE.MeshStandardMaterial({ color: 0x1b1f24, roughness: 0.8, metalness: 0.6 });
+                const chromeMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.95, roughness: 0.15 });
+                const rubberMat = new THREE.MeshStandardMaterial({ color: 0x161719, roughness: 0.92 });
+                const headlightMat = new THREE.MeshBasicMaterial({ color: 0xffffee });
+                const taillightMat = new THREE.MeshStandardMaterial({ color: 0x660000, emissive: 0x000000, roughness: 0.3 });
+
+                const frame = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.25, 7.2), chassisMat);
+                frame.position.y = 0.8;
+                frame.castShadow = true;
+                truck.add(frame);
+
+                const cabGroup = new THREE.Group();
+                const mainCab = new THREE.Mesh(new THREE.BoxGeometry(2.45, 2.4, 2.5), cabMat);
+                mainCab.position.set(0, 2.2, 1.25);
+                mainCab.castShadow = true;
+                cabGroup.add(mainCab);
+
+                const roof = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.6, 2.0), cabMat);
+                roof.position.set(0, 3.6, 1.1);
+                roof.castShadow = true;
+                cabGroup.add(roof);
+
+                const grille = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.3, 0.1), chassisMat);
+                grille.position.set(0, 1.75, 2.52);
+                cabGroup.add(grille);
+
+                const bullBar = new THREE.Mesh(new THREE.TorusGeometry(0.9, 0.05, 8, 24, Math.PI), chromeMat);
+                bullBar.position.set(0, 1.3, 2.7);
+                bullBar.rotation.x = -Math.PI / 2;
+                cabGroup.add(bullBar);
+
+                const hlL = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.2, 0.1), headlightMat);
+                hlL.position.set(-0.95, 0.85, 2.65);
+                cabGroup.add(hlL);
+                const hlR = hlL.clone();
+                hlR.position.x = 0.95;
+                cabGroup.add(hlR);
+
+                const spotL = new THREE.SpotLight(0xfffaee, 2.4, 110, Math.PI / 6, 0.35, 1.2);
+                spotL.position.set(-0.95, 0.9, 2.7);
+                spotL.target.position.set(-1.5, 0.2, 35);
+                spotL.visible = false;
+                cabGroup.add(spotL); cabGroup.add(spotL.target);
+
+                const spotR = new THREE.SpotLight(0xfffaee, 2.4, 110, Math.PI / 6, 0.35, 1.2);
+                spotR.position.set(0.95, 0.9, 2.7);
+                spotR.target.position.set(1.5, 0.2, 35);
+                spotR.visible = false;
+                cabGroup.add(spotR); cabGroup.add(spotR.target);
+
+                truck.add(cabGroup);
+
+                const tlL = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.15, 0.05), taillightMat);
+                tlL.position.set(-0.8, 0.8, -3.61);
+                truck.add(tlL);
+                const tlR = tlL.clone();
+                tlR.position.x = 0.8;
+                truck.add(tlR);
+
+                const wheelGeom = new THREE.CylinderGeometry(0.52, 0.52, 0.38, 16);
+                wheelGeom.rotateZ(Math.PI / 2);
+                function makeWheel() {
+                  const wg = new THREE.Group();
+                  const tire = new THREE.Mesh(wheelGeom, rubberMat);
+                  tire.castShadow = true;
+                  wg.add(tire);
+                  return wg;
+                }
+
+                const wheels = {
+                  frontL: makeWheel(), frontR: makeWheel(),
+                  midL: makeWheel(), midR: makeWheel(),
+                  rearL: makeWheel(), rearR: makeWheel()
+                };
+
+                const steerPivotL = new THREE.Group();
+                steerPivotL.position.set(-1.18, 0.52, 2.2);
+                steerPivotL.add(wheels.frontL);
+                truck.add(steerPivotL);
+
+                const steerPivotR = new THREE.Group();
+                steerPivotR.position.set(1.18, 0.52, 2.2);
+                steerPivotR.add(wheels.frontR);
+                truck.add(steerPivotR);
+
+                wheels.midL.position.set(-1.18, 0.52, -1.3);
+                wheels.midR.position.set(1.18, 0.52, -1.3);
+                wheels.rearL.position.set(-1.18, 0.52, -2.6);
+                wheels.rearR.position.set(1.18, 0.52, -2.6);
+                truck.add(wheels.midL); truck.add(wheels.midR);
+                truck.add(wheels.rearL); truck.add(wheels.rearR);
+
+                return {
+                  mesh: truck, cabGroup, wheels,
+                  steerL: steerPivotL, steerR: steerPivotR,
+                  spotL, spotR, taillightMat
+                };
+              }
+              const truck = buildDetailedTruck();
+              scene.add(truck.mesh);
+
+              const WORLD_LENGTH = 3200;
+              const TAR_WIDTH = 10;
+              const GRAVEL_WIDTH = 8.5;
+
+              const groundGeom = new THREE.PlaneGeometry(800, WORLD_LENGTH, 16, 64);
+              groundGeom.rotateX(-Math.PI / 2);
+              const groundMesh = new THREE.Mesh(groundGeom, new THREE.MeshStandardMaterial({ color: 0xaa542a, roughness: 0.95 }));
+              groundMesh.position.z = WORLD_LENGTH * 0.35;
+              groundMesh.receiveShadow = true;
+              scene.add(groundMesh);
+
+              const tarGeom = new THREE.PlaneGeometry(TAR_WIDTH, WORLD_LENGTH);
+              tarGeom.rotateX(-Math.PI / 2);
+              const tarRoad = new THREE.Mesh(tarGeom, new THREE.MeshStandardMaterial({ color: 0x24272c, roughness: 0.85 }));
+              tarRoad.position.set(0, 0.02, WORLD_LENGTH * 0.35);
+              tarRoad.receiveShadow = true;
+              scene.add(tarRoad);
+
+              const gravelPoints = [
+                new THREE.Vector3(TAR_WIDTH * 0.45, 0.025, 120),
+                new THREE.Vector3(14, 0.025, 220),
+                new THREE.Vector3(28, 0.025, 450),
+                new THREE.Vector3(34, 0.025, 750),
+                new THREE.Vector3(22, 0.025, 1050),
+                new THREE.Vector3(TAR_WIDTH * 0.45, 0.025, 1200)
+              ];
+              const gravelSpline = new THREE.CatmullRomCurve3(gravelPoints, false, 'centripetal', 0.5);
+
+              function buildRibbonRoad(curve, segments, width) {
+                const geom = new THREE.BufferGeometry();
+                const vertices = [], normals = [], indices = [];
+                for (let i = 0; i <= segments; i++) {
+                  const t = i / segments;
+                  const pt = curve.getPoint(t);
+                  const tangent = curve.getTangent(t);
+                  const perp = new THREE.Vector3(-tangent.z, 0, tangent.x).normalize();
+                  const pLeft = pt.clone().add(perp.clone().multiplyScalar(-width * 0.5));
+                  const pRight = pt.clone().add(perp.clone().multiplyScalar(width * 0.5));
+                  vertices.push(pLeft.x, 0.026, pLeft.z);
+                  vertices.push(pRight.x, 0.026, pRight.z);
+                  normals.push(0, 1, 0, 0, 1, 0);
+                  if (i < segments) {
+                    const b = i * 2;
+                    indices.push(b, b + 1, b + 2, b + 1, b + 3, b + 2);
+                  }
+                }
+                geom.setIndex(indices);
+                geom.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+                geom.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+                return geom;
+              }
+              const gravelMesh = new THREE.Mesh(buildRibbonRoad(gravelSpline, 100, GRAVEL_WIDTH), new THREE.MeshStandardMaterial({ color: 0x824b2b, roughness: 0.98 }));
+              gravelMesh.receiveShadow = true;
+              scene.add(gravelMesh);
+
+              function sampleRoadSurface(x, z) {
+                if (Math.abs(x) <= TAR_WIDTH * 0.5) return { name: 'TAR', friction: 1.0, drag: 0.015, color: '#22c55e' };
+                if (z >= 115 && z <= 1205 && x > 2 && x < 44) {
+                  let minDistSq = Infinity;
+                  const steps = 80;
+                  for (let i = 0; i <= steps; i++) {
+                    const pt = gravelSpline.getPoint(i / steps);
+                    const dx = x - pt.x, dz = z - pt.z;
+                    const d = dx * dx + dz * dz;
+                    if (d < minDistSq) minDistSq = d;
+                  }
+                  if (Math.sqrt(minDistSq) <= GRAVEL_WIDTH * 0.55) return { name: 'GRAVEL', friction: 0.58, drag: 0.045, color: '#f59e0b' };
+                }
+                return { name: 'SAND', friction: 0.38, drag: 0.09, color: '#ef4444' };
+              }
+
+              const vehicle = {
+                pos: new THREE.Vector3(2.5, 0, 20),
+                velocity: new THREE.Vector3(0, 0, 0),
+                heading: 0,
+                steerAngle: 0,
+                mass: 8800,
+                maxTorque: 2900,
+                brakeForce: 18000,
+                gear: 'D',
+                rpm: 650,
+                idleRpm: 650,
+                maxRpm: 2400,
+                cabPitch: 0,
+                cabRoll: 0
+              };
+
+              const inputs = { gas: false, brake: false, left: false, right: false };
+              let isPaused = false;
+              let cameraMode = 0;
+              let lightsActive = false;
+
+              function resetInputs() {
+                inputs.gas = false; inputs.brake = false; inputs.left = false; inputs.right = false;
+                document.querySelectorAll('.touch-circle').forEach(b => b.classList.remove('active'));
+              }
+
+              window.onAndroidAppPause = function() {
+                isPaused = true;
+                resetInputs();
+                if (audio.ctx && audio.ctx.state === 'running') audio.ctx.suspend();
+              };
+
+              window.onAndroidAppResume = function() {
+                if (document.getElementById('pause-menu').style.display !== 'flex') {
+                  isPaused = false;
+                }
+                if (audio.ctx && audio.ctx.state === 'suspended') audio.ctx.resume();
+              };
+
+              document.addEventListener('visibilitychange', () => {
+                if (document.hidden) window.onAndroidAppPause();
+                else window.onAndroidAppResume();
+              });
+
+              function bindPointer(id, down, up) {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.addEventListener('pointerdown', (e) => {
+                  e.preventDefault();
+                  try { el.setPointerCapture(e.pointerId); } catch (_) {}
+                  el.classList.add('active');
+                  down();
+                });
+                const releaseHandler = (e) => {
+                  e.preventDefault();
+                  try { if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId); } catch (_) {}
+                  el.classList.remove('active');
+                  up();
+                };
+                el.addEventListener('pointerup', releaseHandler);
+                el.addEventListener('pointercancel', releaseHandler);
+                el.addEventListener('pointerleave', releaseHandler);
+              }
+
+              bindPointer('touch-gas', () => { inputs.gas = true; }, () => { inputs.gas = false; });
+              bindPointer('touch-brake', () => { inputs.brake = true; }, () => { inputs.brake = false; });
+              bindPointer('touch-left', () => { inputs.left = true; }, () => { inputs.left = false; });
+              bindPointer('touch-right', () => { inputs.right = true; }, () => { inputs.right = false; });
+
+              document.getElementById('touch-gear').addEventListener('click', () => {
+                vehicle.gear = vehicle.gear === 'D' ? 'N' : (vehicle.gear === 'N' ? 'R' : 'D');
+                document.getElementById('gear-txt').innerText = vehicle.gear;
+                audio.playAirBrakeHiss();
+              });
+
+              function recoverTruck() {
+                vehicle.pos.set(2.5, 0, vehicle.pos.z);
+                vehicle.velocity.set(0, 0, 0);
+                vehicle.heading = 0;
+                vehicle.steerAngle = 0;
+                audio.playAirBrakeHiss();
+                if (isPaused) togglePause();
+              }
+              document.getElementById('btn-recover').addEventListener('click', recoverTruck);
+
+              function togglePause() {
+                isPaused = !isPaused;
+                document.getElementById('pause-menu').style.display = isPaused ? 'flex' : 'none';
+                resetInputs();
+              }
+              document.getElementById('btn-pause-toggle').addEventListener('click', togglePause);
+              document.getElementById('btn-resume').addEventListener('click', togglePause);
+
+              document.getElementById('btn-cam').addEventListener('click', () => { cameraMode = (cameraMode + 1) % 3; });
+              document.getElementById('btn-lights').addEventListener('click', () => {
+                lightsActive = !lightsActive;
+                truck.spotL.visible = lightsActive;
+                truck.spotR.visible = lightsActive;
+              });
+
+              const hornBtn = document.getElementById('btn-horn');
+              hornBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); audio.setHorn(true); });
+              hornBtn.addEventListener('pointerup', (e) => { e.preventDefault(); audio.setHorn(false); });
+              hornBtn.addEventListener('pointercancel', (e) => { e.preventDefault(); audio.setHorn(false); });
+
+              const audio = new TruckAudioSystem();
+              document.getElementById('btn-start').addEventListener('click', () => {
+                audio.init();
+                document.getElementById('start-modal').style.display = 'none';
+                audio.playAirBrakeHiss();
+              });
+
+              const cameraDampedPos = new THREE.Vector3(0, 5, -12);
+              const cameraLookTarget = new THREE.Vector3(0, 2, 0);
+              let lastTime = performance.now();
+
+              function animate() {
+                requestAnimationFrame(animate);
+                const now = performance.now();
+                const dt = Math.min((now - lastTime) / 1000, 0.05);
+                lastTime = now;
+
+                if (isPaused) {
+                  renderer.render(scene, camera);
+                  return;
+                }
+
+                const surface = sampleRoadSurface(vehicle.pos.x, vehicle.pos.z);
+
+                let targetSteer = 0;
+                if (inputs.left) targetSteer += 0.50;
+                if (inputs.right) targetSteer -= 0.50;
+                vehicle.steerAngle += (targetSteer - vehicle.steerAngle) * Math.min(1.0, 5.0 * dt);
+                truck.steerL.rotation.y = vehicle.steerAngle;
+                truck.steerR.rotation.y = vehicle.steerAngle;
+
+                const fwd = new THREE.Vector3(Math.sin(vehicle.heading), 0, Math.cos(vehicle.heading));
+                const speed = vehicle.velocity.dot(fwd);
+                const speedKmh = Math.abs(speed * 3.6);
+
+                let ratio = vehicle.gear === 'D' ? (speedKmh < 20 ? 3.6 : (speedKmh < 45 ? 2.2 : 1.2)) : (vehicle.gear === 'R' ? -3.0 : 0.0);
+                const targetRpm = vehicle.idleRpm + (speedKmh * 24 * Math.abs(ratio)) + (inputs.gas ? 550 : 0);
+                vehicle.rpm += (Math.min(vehicle.maxRpm, targetRpm) - vehicle.rpm) * Math.min(1.0, 6.0 * dt);
+
+                let tractiveForce = 0;
+                if (inputs.gas && vehicle.gear !== 'N') tractiveForce = (vehicle.maxTorque * ratio) * surface.friction;
+
+                let netForce = tractiveForce - (0.5 * 1.225 * 0.72 * 6.5 * speed * speed * Math.sign(speed)) - (vehicle.mass * 9.81 * surface.drag * Math.sign(speed));
+
+                if (inputs.brake) {
+                  truck.taillightMat.emissive.setHex(0xcc1111);
+                  if (Math.abs(speed) > 0.08) netForce -= Math.sign(speed) * vehicle.brakeForce * surface.friction;
+                } else {
+                  truck.taillightMat.emissive.setHex(0x000000);
+                }
+
+                const accel = netForce / vehicle.mass;
+                vehicle.velocity.add(fwd.clone().multiplyScalar(accel * dt));
+
+                if (inputs.brake && vehicle.velocity.length() < 0.12 && !inputs.gas) vehicle.velocity.set(0, 0, 0);
+
+                const lat = new THREE.Vector3(Math.cos(vehicle.heading), 0, -Math.sin(vehicle.heading));
+                vehicle.velocity.add(lat.clone().multiplyScalar(-vehicle.velocity.dot(lat) * 8.5 * surface.friction * dt));
+
+                const angVel = (speed / 4.8) * Math.tan(vehicle.steerAngle);
+                vehicle.heading += angVel * dt;
+                vehicle.pos.add(vehicle.velocity.clone().multiplyScalar(dt));
+
+                if (vehicle.pos.z > WORLD_LENGTH * 0.8) vehicle.pos.z = -100;
+
+                truck.mesh.position.copy(vehicle.pos);
+                truck.mesh.rotation.y = vehicle.heading;
+
+                const rotDelta = -(speed * dt / (Math.PI * 1.04)) * (Math.PI * 2);
+                truck.wheels.frontL.rotation.x += rotDelta; truck.wheels.frontR.rotation.x += rotDelta;
+                truck.wheels.midL.rotation.x += rotDelta; truck.wheels.midR.rotation.x += rotDelta;
+                truck.wheels.rearL.rotation.x += rotDelta; truck.wheels.rearR.rotation.x += rotDelta;
+
+                vehicle.cabPitch += (-accel * 0.012 - vehicle.cabPitch) * Math.min(1.0, 6.0 * dt);
+                vehicle.cabRoll += (angVel * 0.16 - vehicle.cabRoll) * Math.min(1.0, 6.0 * dt);
+                truck.cabGroup.rotation.x = vehicle.cabPitch;
+                truck.cabGroup.rotation.z = vehicle.cabRoll;
+
+                audio.update(vehicle.rpm, inputs.gas ? 1.0 : 0.0, isPaused);
+
+                if (cameraMode === 0) {
+                  const offset = new THREE.Vector3(0, 3.8, -10.5).applyAxisAngle(new THREE.Vector3(0, 1, 0), vehicle.heading);
+                  cameraDampedPos.lerp(vehicle.pos.clone().add(offset), 8.0 * dt);
+                  camera.position.copy(cameraDampedPos);
+                  const lookTarget = vehicle.pos.clone().add(new THREE.Vector3(0, 1.8, 3.8).applyAxisAngle(new THREE.Vector3(0, 1, 0), vehicle.heading));
+                  cameraLookTarget.lerp(lookTarget, 10.0 * dt);
+                  camera.lookAt(cameraLookTarget);
+                } else if (cameraMode === 1) {
+                  const cabOffset = new THREE.Vector3(0.58, 2.75, 1.4).applyAxisAngle(new THREE.Vector3(0, 1, 0), vehicle.heading);
+                  camera.position.copy(vehicle.pos.clone().add(cabOffset));
+                  const cabTarget = new THREE.Vector3(0.58, 2.7, 24).applyAxisAngle(new THREE.Vector3(0, 1, 0), vehicle.heading);
+                  camera.lookAt(vehicle.pos.clone().add(cabTarget));
+                } else {
+                  const bOffset = new THREE.Vector3(0, 0.9, 2.85).applyAxisAngle(new THREE.Vector3(0, 1, 0), vehicle.heading);
+                  camera.position.copy(vehicle.pos.clone().add(bOffset));
+                  const bTarget = new THREE.Vector3(0, 0.85, 30).applyAxisAngle(new THREE.Vector3(0, 1, 0), vehicle.heading);
+                  camera.lookAt(vehicle.pos.clone().add(bTarget));
+                }
+
+                document.getElementById('speed-txt').innerText = Math.round(speedKmh);
+                document.getElementById('rpm-txt').innerText = Math.round(vehicle.rpm);
+                const sEl = document.getElementById('surface-txt');
+                sEl.innerText = surface.name; sEl.style.color = surface.color;
+
+                renderer.render(scene, camera);
+              }
+
+              window.addEventListener('resize', () => {
+                const w = Math.max(1, window.innerWidth);
+                const h = Math.max(1, window.innerHeight);
+                camera.aspect = w / h;
+                camera.updateProjectionMatrix();
+                renderer.setSize(w, h);
+              });
+
+              animate();
+            </script>
+          </body>
+          </html>
+          EOF
+
+          # 8. Download Three.js locally into assets
           curl -s -L -o app/src/main/assets/www/js/three.min.js https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js
           test -s app/src/main/assets/www/js/three.min.js || exit 1
 
